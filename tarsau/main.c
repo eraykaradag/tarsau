@@ -2,19 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include "functions.h"
 
 int main(int argc, char **argv) {
-    // current working directory for test purposes, clear later.
-//    char cwd[1024];
-//    if (getcwd(cwd, sizeof(cwd)) != NULL) {
-//        printf("Current working dir: %s\n", cwd);
-//    } else {
-//        perror("getcwd() error");
-//    }
-
     if (argc < 2) {
         printf("Error: improper command!\n");
         return -1;
@@ -24,18 +14,21 @@ int main(int argc, char **argv) {
     bool is_archiving = false;
     bool o_opt = false;
     int num_text_files = 0;
-    int totalSize = 0;
+    long totalSize = 0;
 
     for (int i = 1; i < argc; i++) {
-//        char *argument = argv[i];
-//        printf("%s\n", argument);
         if (strcmp(argv[i], "-b") == 0) {
             if (is_archiving) {
                 printf("Error: Multiple -b commands are not allowed.\n");
                 return -1;
             }
-            is_archiving = true;
-            continue;
+            if (i + 1 < argc) {
+                is_archiving = true;
+                continue;
+            } else {
+                printf("Error: Missing filename after -b option.\n");
+                return -1;
+            }
         }
         if (strcmp(argv[i], "-o") == 0) {
             if (o_opt) {
@@ -43,17 +36,27 @@ int main(int argc, char **argv) {
                 return -1;
             }
             if (i + 1 < argc) {
+                archive_file_name = malloc(strlen(argv[i + 1]) +
+                                           1); // I'm allocating new memory for filename + the null terminator
+                if (!archive_file_name) {
+                    perror("Memory allocation failed");
+                    return -1;
+                }
+                archive_file_name = strdup(argv[i + 1]);
                 // Check if the file already ends with '.sau' if so do not add another '.sau'.
                 if ((endsWith(archive_file_name, ".sau") != 0)) {
-
-                    archive_file_name = malloc(strlen(argv[i + 1]) +
-                                               5); // I'm allocating new memory for filename + ".sau" + the null terminator
-                    if (!archive_file_name) {
-                        perror("Memory allocation failed");
+                    char* temp = realloc(archive_file_name, strlen(argv[i + 1]) + strlen(".sau") + 1);
+                    if (!temp) {
+                        free(archive_file_name);
+                        perror("Memory reallocation failed");
                         return -1;
                     }
-                    sprintf(archive_file_name, "%s.sau", argv[++i]);
+                    archive_file_name = temp;
+
+                    // Concatenate ".sau" to the filename
+                    sprintf(archive_file_name, "%s.sau", argv[i + 1]);
                 }
+                truncateFile(archive_file_name);
                 o_opt = true;
             } else {
                 printf("Error: Missing filename after -o option.\n");
