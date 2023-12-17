@@ -76,12 +76,12 @@ int createHeader(const char *filename, const char *archive_file_name) {
 
 
 long getSize(const char *filename) {
-    FILE *readFile = fopen(filename, "r");
-    if (readFile == NULL) {
-        perror("Error opening file");
+	struct stat fileStat;
+    if (stat(filename, &fileStat) != 0) {
+        perror("Error getting file size");
         return -1;
     }
-    long size = fseek(readFile, 0, SEEK_END);
+    long size = fileStat.st_size;
     fclose(readFile);
     return size;
 }
