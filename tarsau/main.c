@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
                 archive_file_name = NULL;
             }
             if (MODE == ARCHIVING || o_opt) {
+                free(archive_file_name);
                 printf("Error: -a option cannot be used with -b or -o options.\n");
                 return -1;
             }
@@ -84,6 +85,7 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && endsWith(argv[i + 1], ".sau") == 0) {
                 extract_file_name = strdup(argv[++i]);
                 if (extract_file_name == NULL) {
+                    free(archive_file_name);
                     free(extract_file_name);
                     perror("Memory allocation failed for extract file name.");
                     return -1;
@@ -99,6 +101,7 @@ int main(int argc, char** argv) {
                 extract_directory = strdup(argv[++i]);
                 if (extract_directory == NULL) {
                     free(extract_directory);
+                    free(archive_file_name);
                     perror("Memory allocation failed for extract directory.");
                     return -1;
                 }
@@ -112,6 +115,7 @@ int main(int argc, char** argv) {
             if (strcmp(argv[i], "-b") != 0 && strcmp(argv[i], "-o") != 0 && strcmp(argv[i - 1], "-o") != 0) {
                 if (isTextFile(argv[i]) == 0) {
                     printf("Error: %s input file format is incompatible! \n", argv[i]);
+                    free(archive_file_name);
                     return -1;
                 }
                 num_text_files++;
@@ -120,10 +124,12 @@ int main(int argc, char** argv) {
         }
         if (num_text_files > 32) {
             printf("Error: This archiver can only archive 32 files at a time. Please reduce the number of files.\n");
+            free(archive_file_name);
             return -1;
         }
         if (totalSize > (200 * 1024 * 1024)) {
             printf("Error: The data that you want to archive is larger than 200MiB\n");
+            free(archive_file_name);
             return -1;
         }
 
@@ -149,8 +155,8 @@ int main(int argc, char** argv) {
             extract_directory = strdup("."); // current directory by default
             if (extract_directory == NULL) {
                 free(extract_directory);
-                perror("Memory allocation failed for extract directory.");
                 free(archive_file_name);
+                perror("Memory allocation failed for extract directory.");
                 return -1;
             }
         }
@@ -158,13 +164,13 @@ int main(int argc, char** argv) {
         if (result != 0) {
             free(archive_file_name);
             free(extract_directory);
-            perror("Error: Extracting was not successful.");
+            fprintf(stderr, "Error: Extracting was not successful.\n");
             return -1;
         }
 
 
     } else {
-        printf("Error: There is no such an option in tarsau command! --> -b for archiving -a for extracting\n");
+        printf("Error: There is no such an option in tarsau command! --> -b for archiving -a for extracting.\n");
         return -1;
     }
     free(archive_file_name);

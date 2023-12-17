@@ -5,6 +5,9 @@
 #include <errno.h>
 #include <limits.h>
 #include <libgen.h>
+#include <ctype.h>
+
+#define HEADER_SIZE 10
 
 enum Mode{
     NONE,
@@ -18,8 +21,6 @@ typedef struct {
     long size;
 } FileHeader;
 
-
-int HEADER_SIZE = 10;
 
 int isTextFile(const char *filename) {
     FILE *file = fopen(filename, "rb");
@@ -131,6 +132,49 @@ void truncateFile(char *file_name){
     fclose(file);
 }
 
+int validateHeaderFormat(char *header) {
+    // Check if the first 10 characters are digits
+    for (int i = 0; i < HEADER_SIZE; i++) {
+        if (!isdigit(header[i])) {
+            fprintf(stderr, "Invalid header format: first 10 bytes should represent the total "
+                            "header length and must be numeric.\n");
+            return -1;
+        }
+    }
+
+    // Convert the first 10 characters to a number
+    char length_str[HEADER_SIZE + 1] = {0};
+    strncpy(length_str, header, HEADER_SIZE);
+    long header_length = strtol(length_str, NULL, 10);
+
+    // Check for the total length
+    if (header_length != strlen(header)) {
+        fprintf(stderr, "Invalid header format: header length mismatch with the actual header size.\n");
+        return -1;
+    }
+
+    // Validate each file entry
+    const char *entry_start = header + HEADER_SIZE + 1; // Skip the header size and delimiter
+    const char *entry_end = strchr(entry_start, '|');
+
+    while (entry_end != NULL) {
+        int comma_count = 0;
+        for (const char *p = entry_start; p < entry_end; p++) {
+            if (*p == ',') comma_count++;
+        }
+        if (comma_count != 2) {
+            fprintf(stderr, "Invalid header format: incorrect file entry format\n");
+            return -1;
+        }
+
+        // Move to the next entry
+        entry_start = entry_end + 1;
+        entry_end = strchr(entry_start, '|');
+    }
+
+    return 0;
+}
+
 
 int getHeaderContent(FileHeader **headers, int *num_headers, const char *archive_file_name) {
     FILE *archive_file = fopen(archive_file_name, "r");
@@ -149,6 +193,13 @@ int getHeaderContent(FileHeader **headers, int *num_headers, const char *archive
 
     if (line[strlen(line) - 1] == '\n') {
         line[strlen(line) - 1] = '\0';
+    }
+
+    // Validate the header format
+    if (validateHeaderFormat(line) != 0) {
+        fclose(archive_file);
+        free(line);
+        return -1;
     }
 
     char *header_part = line + HEADER_SIZE + 1;
@@ -299,7 +350,6 @@ int extractFiles(const char* archive_file_name, const char* extract_directory) {
         }
 
         // Open file for writing in text mode
-        char* path = full_path;
         FILE *out_file = fopen(full_path, "w");
         if (out_file == NULL) {
             perror("Error opening output file");
@@ -342,6 +392,6 @@ int extractFiles(const char* archive_file_name, const char* extract_directory) {
     }
     free(headers);
 
-    return 0; // Success
+    return 0;
 }
 
