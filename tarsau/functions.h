@@ -145,7 +145,8 @@ int validateHeaderFormat(char *header) {
     // Convert the first 10 characters to a number
     char length_str[HEADER_SIZE + 1] = {0};
     strncpy(length_str, header, HEADER_SIZE);
-    long header_length = strtol(length_str, NULL, 10);
+
+    size_t header_length = strtol(length_str, NULL, 10);
 
     // Check for the total length
     if (header_length != strlen(header)) {
@@ -321,12 +322,6 @@ int extractFiles(const char* archive_file_name, const char* extract_directory) {
         return -1; // Error message already printed by getHeaderContent
     }
 
-    for (int i = 0; i < num_headers; ++i) {
-        char* f = headers[i].file_name;
-        mode_t p = headers[i].permissions;
-        long s = headers[i].size;
-    }
-
     // Open the archive file for reading file contents
     FILE *archive_file = fopen(archive_file_name, "r");
     if (archive_file == NULL) {
@@ -360,7 +355,7 @@ int extractFiles(const char* archive_file_name, const char* extract_directory) {
 
         // Read and write the file content
         char buffer[1024];
-        long bytes_to_read = headers[i].size;
+        size_t bytes_to_read = headers[i].size;
         while (bytes_to_read > 0) {
             size_t bytes_to_read_now = (bytes_to_read < sizeof(buffer)) ? bytes_to_read : sizeof(buffer);
             size_t bytes_read = fread(buffer, 1, bytes_to_read_now, archive_file);
