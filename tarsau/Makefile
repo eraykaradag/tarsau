@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11
+CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE
 TARGET = tarsau
 
 all: $(TARGET)
