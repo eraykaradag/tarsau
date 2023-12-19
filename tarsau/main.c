@@ -26,23 +26,31 @@ int main(int argc, char** argv) {
         if (strcmp(argv[i], "-b") == 0) {
             if (MODE == ARCHIVING) {
                 printf("Error: Multiple -b commands are not allowed.\n");
+                free(archive_file_name);
                 return -1;
             }
             if (i + 1 < argc) {
                 if (argv[i + 1][0] == '-') {
                     printf("Error: Missing filename after -b option.\n");
+                    free(archive_file_name);
+                    return -1;
+                } else if (!file_exists(argv[i + 1])){
+                    free(archive_file_name);
+                    fprintf(stderr, "Error: The file '%s' does not exist.\n", argv[i + 1]);
                     return -1;
                 }
                 MODE = ARCHIVING;
                 continue;
             } else {
                 printf("Error: Missing filename after -b option.\n");
+                free(archive_file_name);
                 return -1;
             }
         }
         if (strcmp(argv[i], "-o") == 0) {
             if (o_opt) {
                 printf("Error: Multiple -o commands are not allowed.\n");
+                free(archive_file_name);
                 return -1;
             }
             if (i + 1 < argc) {
@@ -64,6 +72,7 @@ int main(int argc, char** argv) {
                         perror("Memory reallocation failed for archive file name.");
                         return -1;
                     }
+                    free(archive_file_name);
                     archive_file_name = temp;
 
                     // Concatenate ".sau" to the filename
@@ -83,6 +92,11 @@ int main(int argc, char** argv) {
             }
             MODE = EXTRACTING;
             if (i + 1 < argc && endsWith(argv[i + 1], ".sau") == 0) {
+                if(!file_exists(argv[i + 1])){
+                    free(archive_file_name);
+                    fprintf(stderr, "Error: The file '%s' does not exist.\n", argv[i + 1]);
+                    return -1;
+                }
                 extract_file_name = strdup(argv[++i]);
                 if (extract_file_name == NULL) {
                     free(archive_file_name);
@@ -95,6 +109,7 @@ int main(int argc, char** argv) {
                     printf("Error: Missing archive file name after -a option.\n");
                 else
                     printf("Error: Archive file is inappropriate or corrupt!\n");
+                free(archive_file_name);
                 return -1;
             }
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -141,10 +156,6 @@ int main(int argc, char** argv) {
             }
         }
 
-        FILE* file = fopen(archive_file_name, "a+");
-        fprintf(file, "\n");
-        fclose(file); //spacing after header info
-
         for (int i = 2; i < argc; i++) {
             if (strcmp(argv[i], "-b") != 0 && strcmp(argv[i], "-o") != 0 && strcmp(argv[i - 1], "-o") != 0) {
                 readAndWrite(argv[i], archive_file_name); //write data into .sau file
@@ -160,8 +171,9 @@ int main(int argc, char** argv) {
                 return -1;
             }
         }
-        int result = extractFiles(archive_file_name, extract_directory);
+        int result = extractFiles(extract_file_name, extract_directory);
         if (result != 0) {
+            free(extract_file_name);
             free(archive_file_name);
             free(extract_directory);
             fprintf(stderr, "Error: Extracting was not successful.\n");
@@ -171,8 +183,11 @@ int main(int argc, char** argv) {
 
     } else {
         printf("Error: There is no such an option in tarsau command! --> -b for archiving -a for extracting.\n");
+        free(archive_file_name);
         return -1;
     }
+    free(extract_file_name);
+    free(extract_directory);
     free(archive_file_name);
     printf("SUCCESS! WOOHOOO!\n");
     return 0;
