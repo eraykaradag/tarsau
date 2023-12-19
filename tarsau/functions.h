@@ -132,6 +132,45 @@ void truncateFile(char *file_name){
     fclose(file);
 }
 
+int file_exists(const char *path) {
+    struct stat buffer;
+    return (stat(path, &buffer) == 0);
+}
+
+long getHeaderSize(const char* archive_file_name){
+    FILE *archive_file = fopen(archive_file_name,"r");
+    if (archive_file == NULL) {
+        perror("Error opening file");
+        fclose(archive_file);
+        return -1;
+    }
+    char header_size_str[11] = {0}; // first 10 byte + 1 for null terminator
+    size_t result = fread(header_size_str,1, HEADER_SIZE, archive_file);
+    fclose(archive_file);
+    if (result != 10){
+        perror("Error reading header size\n");
+        return -1;
+    }
+    char *endptr;
+    errno = 0;
+    long val = strtol(header_size_str, &endptr, 10);
+
+    if (errno != 0) {
+        perror("strtol");
+        return -1;
+    }
+    if (endptr == header_size_str) {
+        fprintf(stderr, "No digits were found\n");
+        return -1;
+    }
+
+    if (val < INT_MIN || val > INT_MAX) {
+        fprintf(stderr, "Header size out of int range\n");
+        return -1;
+    }
+    return val;
+}
+
 int validateHeaderFormat(char *header) {
     // Check if the first 10 characters are digits
     for (int i = 0; i < HEADER_SIZE; i++) {
@@ -178,32 +217,29 @@ int validateHeaderFormat(char *header) {
 
 
 int getHeaderContent(FileHeader **headers, int *num_headers, const char *archive_file_name) {
+    long header_size = getHeaderSize(archive_file_name);
+    char* header_contents = malloc(sizeof(char) * header_size + 1);
+    header_contents[header_size] = '\0';
+
     FILE *archive_file = fopen(archive_file_name, "r");
     if (archive_file == NULL) {
         perror("Error opening archive file");
         return -1;
     }
 
-    char *line = NULL;
-    size_t len = 0;
-    if (getline(&line, &len, archive_file) == -1) {
-        perror("Error reading header");
-        fclose(archive_file);
+    size_t len = fread(header_contents, 1, header_size, archive_file);
+    fclose(archive_file);
+    if (len != (size_t)header_size) {
+        fprintf(stderr, "fread() failed: %zu\n", len);
         return -1;
-    }
-
-    if (line[strlen(line) - 1] == '\n') {
-        line[strlen(line) - 1] = '\0';
     }
 
     // Validate the header format
-    if (validateHeaderFormat(line) != 0) {
-        fclose(archive_file);
-        free(line);
+    if (validateHeaderFormat(header_contents) != 0) {
         return -1;
     }
 
-    char *header_part = line + HEADER_SIZE + 1;
+    char *header_part = header_contents + HEADER_SIZE + 1;
     char *saveptr;
     char *token = strtok_r(header_part, "|", &saveptr);
     int idx = 0;
@@ -217,8 +253,7 @@ int getHeaderContent(FileHeader **headers, int *num_headers, const char *archive
         *headers = realloc(*headers, (idx + 1) * sizeof(FileHeader));
         if (*headers == NULL) {
             perror("Memory allocation failed for headers");
-            fclose(archive_file);
-            free(line);
+            free(header_contents);
             return -1;
         }
 
@@ -231,8 +266,7 @@ int getHeaderContent(FileHeader **headers, int *num_headers, const char *archive
                 free((*headers)[i].file_name);
             }
             free(*headers);
-            fclose(archive_file);
-            free(line);
+            free(header_contents);
             return -1;
         }
 
@@ -241,45 +275,9 @@ int getHeaderContent(FileHeader **headers, int *num_headers, const char *archive
     }
 
     *num_headers = idx;
-    fclose(archive_file);
-    free(line);
+    free(header_contents);
 
     return 0;
-}
-
-int getHeaderSize(const char* archive_file_name){
-    FILE *archive_file = fopen(archive_file_name,"r");
-    if (archive_file == NULL) {
-        perror("Error opening file");
-        fclose(archive_file);
-        return -1;
-    }
-    char header_size_str[11] = {0}; // first 10 byte + 1 for null terminator
-    size_t result = fread(header_size_str,1, HEADER_SIZE, archive_file);
-    fclose(archive_file);
-    if (result != 10){
-        perror("Error reading header size\n");
-        fclose(archive_file);
-        return -1;
-    }
-    char *endptr;
-    errno = 0;
-    long val = strtol(header_size_str, &endptr, 10);
-
-    if (errno != 0) {
-        perror("strtol");
-        return -1;
-    }
-    if (endptr == header_size_str) {
-        fprintf(stderr, "No digits were found\n");
-        return -1;
-    }
-
-    if (val < INT_MIN || val > INT_MAX) {
-        fprintf(stderr, "Header size out of int range\n");
-        return -1;
-    }
-    return (int)val;
 }
 
 int createDirectoryStructure(const char* path) {
@@ -307,23 +305,23 @@ int createDirectoryStructure(const char* path) {
     return 0;
 }
 
-int extractFiles(const char* archive_file_name, const char* extract_directory) {
+int extractFiles(const char* extract_file_name, const char* extract_directory) {
     FileHeader *headers = NULL;
     int num_headers = 0;
 
     // Get header size from archive file
-    int header_size = getHeaderSize(archive_file_name);
+    long header_size = getHeaderSize(extract_file_name);
     if (header_size < 0) {
         return -1; // Error message already printed by getHeaderSize
     }
 
     // Get header content from archive file
-    if (getHeaderContent(&headers, &num_headers, archive_file_name) != 0) {
+    if (getHeaderContent(&headers, &num_headers, extract_file_name) != 0) {
         return -1; // Error message already printed by getHeaderContent
     }
 
     // Open the archive file for reading file contents
-    FILE *archive_file = fopen(archive_file_name, "r");
+    FILE *archive_file = fopen(extract_file_name, "r");
     if (archive_file == NULL) {
         perror("Error opening archive file");
         free(headers);
@@ -331,7 +329,7 @@ int extractFiles(const char* archive_file_name, const char* extract_directory) {
     }
 
     // Skip the header section in the archive file
-    fseek(archive_file, header_size + 1, SEEK_SET);
+    fseek(archive_file, header_size, SEEK_SET);
 
     for (int i = 0; i < num_headers; i++) {
         char full_path[PATH_MAX];
