@@ -1,3 +1,3 @@
 # tarsau
 
-An Archiver Project without compress
+An Archiver Project
